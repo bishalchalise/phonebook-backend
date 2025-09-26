@@ -8,7 +8,10 @@ const errorHandler = (error, request, response, next) => {
   console.error(error.message);
   if (error.name === "CastError") {
     return response.status(400).send({ error: "Malformatted id" });
+  } else if (error.name === "ValidationError") {
+    return response.status(400).json({ error: error.message });
   }
+
   next(error);
 };
 app.use(express.static("dist"));
@@ -74,7 +77,7 @@ app.delete("/api/persons/:id", (request, response, next) => {
 });
 
 //create a person
-app.post("/api/persons", (request, response) => {
+app.post("/api/persons", (request, response, next) => {
   const body = request.body;
 
   if (!body.name || !body.number) {
@@ -92,7 +95,7 @@ app.post("/api/persons", (request, response) => {
         return response
           .status(400)
           .json({
-            error: "name must be unique",
+            error: "The name was already saved",
           })
           .end();
       }
@@ -113,20 +116,20 @@ app.post("/api/persons", (request, response) => {
 });
 
 app.put("/api/persons/:id", (request, response, next) => {
-  const { name, number } = request.body;
+  const { number } = request.body;
 
-  Person.findByIdAndUpdate(request.params.id).then((person) => {
-    if (!person) {
-      response.status(400).end();
-    }
-    person.number = number;
-    person
-      .save()
-      .then((updatedPerson) => {
-        response.json(updatedPerson);
-      })
-      .catch((error) => next(error));
-  });
+  Person.findByIdAndUpdate(
+    request.params.id,
+    { number },
+    { new: true, runValidators: true, context: "query" }
+  )
+    .then((updatedPerson) => {
+      if (!updatedPerson) {
+        return response.status(404).end();
+      }
+      response.json(updatedPerson);
+    })
+    .catch((error) => next(error));
 });
 
 //unknown request
